@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PlusCircle, X, ChevronDown } from 'lucide-react';
-import { getAllCandidatures, getCandidatureById } from '../api/fetchApi';
+import { getAllCandidatures, getCandidatureById, createCandidature } from '../api/fetchApi';
 import { useStore } from '../store/useStore';
 
 const ApplicationStatus = {
@@ -15,13 +15,11 @@ export default function Dashboard() {
     const { saveCandidature } = useStore();
     const [candidatures, setCandidatures] = useState([]);
     const [candidature, setCandidature] = useState({
-        id: '',
-        nom: '',
-        prenom: '',
+        entreprise: '',
+        poste: '',
         email: '',
         telephone: '',
-        adresse: '',
-        status: '',
+        status: ApplicationStatus.TO_SEND,
         date: '',
         note: '',
     });
@@ -29,11 +27,6 @@ export default function Dashboard() {
     const [filter, setFilter] = useState({ status: 'Toutes', date: '' });
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     // const [selectedApplication, setSelectedApplication] = useState(null);
-
-    const handleSave = () => {
-        console.log('Save candidature', candidature);
-        saveCandidature(candidature);
-    };
 
     useEffect(() => {
         const fetchAllCandidatures = async () => {
@@ -48,20 +41,42 @@ export default function Dashboard() {
     }, []);
 
     useEffect(() => {
-        const fetchCandidatureById = async () => {
-            try {
-                const data = await getCandidatureById(candidature.id);
-                setCandidature(data)
-            } catch (error) {
-                console.error('Failed to fetch candidature', error);
+        if (candidature.id) {
+            const fetchCandidatureById = async () => {
+                try {
+                    const data = await getCandidatureById(candidature.id);
+                    setCandidature(data)
+                } catch (error) {
+                    console.error('Failed to fetch candidature', error);
+                }
             }
+            fetchCandidatureById();
         }
-        fetchCandidatureById();
     }, [candidature.id]);
+
+    const handleCreate = async () => {
+        try {
+            const data = await createCandidature(candidature);
+            saveCandidature(data);
+            const updatedList = await getAllCandidatures();
+            setCandidatures(updatedList);
+            setCandidature({
+                entreprise: '',
+                poste: '',
+                email: '',
+                telephone: '',
+                status: ApplicationStatus.TO_SEND,
+                date: '',
+                note: '',
+            });
+        } catch (error) {
+            console.error('Failed to create candidature', error);
+        }
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        handleSave();
+        handleCreate();
         setIsAddModalOpen(false);
     };
 
@@ -94,7 +109,6 @@ export default function Dashboard() {
                     <h1 className="text-4xl font-bold text-gray-900">Suivi de Candidatures</h1>
                 </header>
 
-                {/* Statistiques */}
                 <div className="col-span-full">
                     <div className="bg-white p-6 rounded-lg shadow">
                         <h2 className="text-xl font-semibold mb-4">Statistiques</h2>
@@ -119,7 +133,6 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* Filtre et Liste des candidatures */}
                 <div className="col-span-full">
                     <div className="bg-white p-6 rounded-lg shadow">
                         <div className="flex justify-between items-center mb-4">
@@ -155,7 +168,7 @@ export default function Dashboard() {
                                 className="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         </div>
                         <div className="space-y-4">
-                            {candidatures.reverse().map(app => (
+                            {[...candidatures].reverse().map(app => (
                                 <div
                                     key={app.id}
                                     className="flex items-center justify-between p-4 bg-gray-50 rounded-lg shadow cursor-pointer hover:bg-gray-100"
@@ -169,24 +182,6 @@ export default function Dashboard() {
                                     <p className="text-sm text-gray-600">{app.createdAt}</p>
                                 </div>
                             ))}
-                            
-                            {/* {filteredApplications.map(app => (
-                                    <div>
-                                        <h3 className="font-semibold">{app.company}</h3>
-                                        <p className="text-sm text-gray-600">{app.position}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${app.status === ApplicationStatus.PENDING ? 'bg-yellow-100 text-yellow-800' :
-                                            app.status === ApplicationStatus.FOLLOW_UP ? 'bg-blue-100 text-blue-800' :
-                                                app.status === ApplicationStatus.ACCEPTED ? 'bg-green-100 text-green-800' :
-                                                    app.status === ApplicationStatus.REJECTED ? 'bg-red-100 text-red-800' :
-                                                        'bg-gray-100 text-gray-800'}`}>
-                                            {app.status}
-                                        </span>
-                                        <p className="text-xs text-gray-500 mt-1">{app.date}</p>
-                                    </div>
-                                </div>
-                            ))} */}
                         </div>
                     </div>
                 </div>
@@ -202,7 +197,7 @@ export default function Dashboard() {
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={handleSubmit} className="space-y-4 max-h-80 overflow-y-auto p-4">
                             {['entreprise', 'poste', 'email', 'telephone', 'date'].map((item) => (
                                 <div key={item}>
                                     <label htmlFor={item} className="block text-sm font-medium text-gray-700">
@@ -210,25 +205,31 @@ export default function Dashboard() {
                                     </label>
                                     <input
                                         type={item === 'email' ? 'email' : item === 'date' ? 'date' : 'text'}
-                                        id={item.id}
-                                        name={item.entreprise}
+                                        id={item}
+                                        name={item}
                                         value={candidature[item]}
                                         onChange={handleChange}
                                         required
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </div>
                             ))}
                             <label className="block text-sm font-medium text-gray-700" htmlFor="status">Status</label>
-                            <select className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500 appearance-none" name="Status" id="Status">
+                            <select className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                                name="status"
+                                id="Status"
+                                value={candidature.status}
+                                onChange={handleChange}
+                            >
                                 {Object.values(ApplicationStatus).map(status => (
                                     <option key={status} value={status}>{status}</option>
                                 ))}
                             </select>
                             <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                             <label className="block text-sm font-medium text-gray-700" htmlFor="Note">Note</label>
-                            <textarea className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500" name="note" id="note" />
-                            <button type="submit" className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                            <textarea className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500" name="note" id="note" onChange={handleChange} />
+                            <input type="file" name="document" id="document" onChange={handleChange} />
+                            <button type="submit" onSubmit={handleSubmit} className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
                                 Sauvegarder
                             </button>
                         </form>
