@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PlusCircle, X, ChevronDown } from 'lucide-react';
-import { getAllCandidatures, createCandidature, updateCandidature } from '../api/fetchApi';
+import { getAllCandidatures, createCandidature, updateCandidature, deleteCandidature } from '../api/fetchApi';
 import { useStore } from '../store/useStore';
 
 const ApplicationStatus = {
@@ -27,9 +27,11 @@ export default function Dashboard() {
     const { saveCandidature } = useStore();
     const [candidatures, setCandidatures] = useState([]);
     const [candidature, setCandidature] = useState(EMPTY_CANDIDATURE);
-    const [filter, setFilter] = useState({ status: 'Toutes', date: '' });    
+    const [filter, setFilter] = useState({ status: 'Toutes', date: '' });
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [file, setFile] = useState(null);
+    const [error, setError] = useState("");
 
     useEffect(() => {
         const fetchAllCandidatures = async () => {
@@ -65,7 +67,75 @@ export default function Dashboard() {
             console.error('Failed to update candidature', error);
         }
     };
-    
+
+    const handleDelete = async (id) => {
+        try {
+            await deleteCandidature(id);
+            setCandidatures(candidatures.filter(candidatures => candidatures.id !== id))
+        } catch (error) {
+            console.error('Error deleting author:', error)
+        }
+    }
+
+    const handleFileChange = (event) => {
+        const file = event.target.files[0];
+        // Types MIME autorisés pour PDF, JPG, JPEG, et WEBP
+        const validTypes = [
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+        ];
+        if (!validTypes.includes(file.type)) {
+            setFile(null);
+            setError("Please select a PDF, JPG, PNG, or WEBP file.");
+          return;
+        }
+
+        if (file && validTypes.includes(file.type)) {
+            setFile(file);
+            setError("");
+        } else {
+            setFile(null);
+            setError("Please select a PDF, JPG, PNG, or WEBP file.");
+        }
+    };
+
+    const handleUpload = () => {
+        if (!file) {
+            setError("No file selected!");
+            return;
+        }
+
+        const validTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+        if (file && !validTypes.includes(file.type)) {
+            setFile(null);
+            setError("Please select a PDF, JPG, PNG, or WEBP file.");
+          return;
+        }
+        if (file && validTypes.includes(file.type)) {
+            setFile(file);
+            setError("");
+        }
+
+        // Optionnel : Upload vers le serveur
+        const formData = new FormData();
+        formData.append("file", file);
+
+        fetch(`http://localhost:3000/api/candidatures/${candidature.id}`, {
+            method: "POST",
+            body: formData,
+        })
+            .then((response) => {
+                if (response.ok) {
+                    alert("Upload successful!");
+                } else {
+                    setError("Upload failed.");
+                }
+            })
+            .catch(() => setError("Upload failed."));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (isEditMode) {
@@ -81,6 +151,7 @@ export default function Dashboard() {
         setIsEditMode(true);
         setIsAddModalOpen(true);
     };
+
 
     const handleAddNew = () => {
         setIsEditMode(false);
@@ -178,8 +249,7 @@ export default function Dashboard() {
                             {[...candidatures].reverse().map(app => (
                                 <div
                                     key={app.id}
-                                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg shadow cursor-pointer hover:bg-gray-100"
-                                    onClick={() => handleCandidatureClick(app)}
+                                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg shadow"
                                 >
                                     <h3 className="font-semibold">{app.entreprise}</h3>
                                     <p className="text-sm text-gray-600">{app.poste}</p>
@@ -187,6 +257,18 @@ export default function Dashboard() {
                                     <p className="text-sm text-gray-600">{app.telephone}</p>
                                     <p className="text-sm text-gray-600">{app.status}</p>
                                     <p className="text-sm text-gray-600">{app.updatedAt}</p>
+                                    <button
+                                        onClick={() => handleCandidatureClick(app)}
+                                        className="text-blue-500 hover:text-blue-700"
+                                    >
+                                        Modifier
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(app.id)}
+                                        className="text-red-500 hover:text-red-700"
+                                    >
+                                        Supprimer
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -249,6 +331,15 @@ export default function Dashboard() {
                                     value={candidature.note}
                                     onChange={handleChange}
                                 />
+                            </div>
+                            <div>
+                                <input
+                                    type="file"
+                                    accept="application/pdf, image/jpeg, image/png, image/webp"
+                                    onChange={handleFileChange}
+                                />
+                                {error && <p style={{ color: "red" }}>{error}</p>}
+                                <button onClick={handleUpload}>Upload File</button>
                             </div>
                             <button
                                 type="submit"

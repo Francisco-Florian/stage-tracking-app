@@ -36,7 +36,12 @@ const Candidatures = sequelize.define('candidatures', {
     note: {
         type: DataTypes.STRING,
         allowNull: true,
+    },
+
+    file: {
+        type: DataTypes.STRING,
+        allowNull: true,
     }
-});
+})
 
 module.exports = Candidatures;
